@@ -1,0 +1,4 @@
+[0m[[0m[33mwarn[0m] [0m[0m/Users/evan/Desktop/project-2/src/main/scala/project_2/main.scala:72:44: a pure expression does nothing in statement position; multiline expressions may require enclosing parentheses[0m
+[0m[[0m[33mwarn[0m] [0m[0m    val BJKST_bucket_size = bucket_size_in;z_in[0m
+[0m[[0m[33mwarn[0m] [0m[0m                                           ^[0m
+[0m[[0m[33mwarn[0m] [0m[0mone warning found[0m
