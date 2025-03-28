@@ -67,23 +67,48 @@ object main{
 /* A constructor that requies intialize the bucket and the z value. The bucket size is the bucket size of the sketch. */
 
     var bucket: Set[(String, Int)] = bucket_in
-    var z: Int =
+    var z: Int = z_in
 
     val BJKST_bucket_size = bucket_size_in;z_in
 
+    /*
     def this(s: String, z_of_s: Int, bucket_size_in: Int){
       /* A constructor that allows you pass in a single string, zeroes of the string, and the bucket size to initialize the sketch */
       this(Set((s, z_of_s )) , z_of_s, bucket_size_in)
     }
+    */
+    def this(bucket_size_in: Int) {
+      this(Set.empty, 0, bucket_size_in)
+    }
 
     def +(that: BJKSTSketch): BJKSTSketch = {    /* Merging two sketches */
-
+      val maxZ = Math.max(this.z, that.z)
+      var newBucket = this.bucket.filter(_._2 >= maxZ) ++ that.bucket.filter(_._2 >= maxZ)
+      var newZ = maxZ
+      while (newBucket.size > BJKST_bucket_size) {
+        newZ += 1
+        newBucket = newBucket.filter(_._2 >= newZ)
+      }
+      new BJKSTSketch(newBucket, newZ, BJKST_bucket_size)
     }
 
     def add_string(s: String, z_of_s: Int): BJKSTSketch = {   /* add a string to the sketch */
-
+      if (bucket.exists(_._1 == s)) {
+        this
+      } else if (z_of_s >= z) {
+        var newBucket = bucket + ((s, z_of_s))
+        var newZ = z
+        while (newBucket.size > BJKST_bucket_size) {
+          newZ += 1
+          newBucket = newBucket.filter(_._2 >= newZ)
+        }
+        new BJKSTSketch(newBucket, newZ, BJKST_bucket_size)
+      } else {
+        this
+      }
     }
-  }
+    }
+  
 
 
   def tidemark(x: RDD[String], trials: Int): Double = {
@@ -100,12 +125,46 @@ object main{
 
 
   def BJKST(x: RDD[String], width: Int, trials: Int) : Double = {
-
+      val estimates: Seq[Double] = (0 until trials).map { _ =>
+      val hashFunc = new hash_function(1L << 60)
+      val sketch = x.aggregate(new BJKSTSketch(width))(
+        (sketch, s) => {
+          val h = hashFunc.hash(s)
+          val t = hashFunc.zeroes(h)
+          sketch.add_string(s, t)
+        },
+        (sketch1, sketch2) => sketch1 + sketch2
+      )
+      sketch.bucket.size.toDouble * Math.pow(2, sketch.z)
+    }
+    val sortedEstimates = estimates.sorted
+    sortedEstimates(trials / 2)
   }
 
 
   def Tug_of_War(x: RDD[String], width: Int, depth:Int) : Long = {
+    val hashFunctions = (0 until width * depth)
+      .map(_ => new four_universal_Radamacher_hash_function())
+      .toArray
 
+    val xSums = x
+      .map(s => hashFunctions.map(h => h.hash(s))) 
+      .reduce((a, b) => a.zip(b).map { case (x, y) => x + y })  
+
+    
+    val x2 = xSums.map(x => x * x) 
+
+    
+    val groups = x2.grouped(width).toList 
+
+    
+    val means = groups.map(group => group.map(_.toDouble).sum / width)  
+
+   
+    val sortedMeans = means.sorted  
+    val median = sortedMeans(depth / 2) 
+
+    return median.toLong
   }
 
 
@@ -116,7 +175,11 @@ object main{
 
 
   def exact_F2(x: RDD[String]) : Long = {
-
+    val ans = x.map(s => (s, 1L))
+                .reduceByKey(_ + _)
+                .map { case (s, freq) => freq * freq }
+                .reduce(_ + _)
+    return ans
   }
 
 
@@ -130,7 +193,7 @@ object main{
     }
     val input_path = args(0)
 
-  //    val df = spark.read.format("csv").load("data/2014to2017.csv")
+    val df = spark.read.format("csv").load("2014to2017.csv")
     val df = spark.read.format("csv").load(input_path)
     val dfrdd = df.rdd.map(row => row.getString(0))
 
@@ -209,4 +272,3 @@ object main{
 
   }
 }
-
